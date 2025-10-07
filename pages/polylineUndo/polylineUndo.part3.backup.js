@@ -243,4 +243,93 @@ if (redoButton) {
     });
 }
 
-// end of file - part 3 removed, original behavior restored
+class ChangeColorCommand extends Command {
+    constructor(line, newColor) {
+        super();
+        this.line = line;
+        this.newColor = newColor;
+        this.oldColor = line ? line.stroke() : null;
+    }
+    execute() {
+        if (!this.line) return;
+        this.line.stroke(this.newColor);
+        console.log('ChangeColorCommand.execute:', this.newColor, 'for', this.line);
+        const layer = this.line.getLayer();
+        if (layer && layer.batchDraw) layer.batchDraw();
+    }
+    undo() {
+        if (!this.line) return;
+        this.line.stroke(this.oldColor);
+        console.log('ChangeColorCommand.undo: restore', this.oldColor, 'for', this.line);
+        const layer = this.line.getLayer();
+        if (layer && layer.batchDraw) layer.batchDraw();
+    }
+}
+
+// Track the selected polyline (last clicked in the dessin layer)
+let selectedLine = null;
+
+// Click handler on dessin layer to select a polyline
+dessin.on('click', (evt) => {
+    // If the shape is a Konva.Line
+    const shape = evt.target;
+    if (shape && shape.getClassName && shape.getClassName() === 'Line') {
+        selectedLine = shape;
+        // simple visual feedback: change strokeWidth briefly or set dash
+        // reset other lines' shadow/width
+        dessin.find('Line').forEach(l => l.strokeWidth(2));
+        selectedLine.strokeWidth(4);
+        dessin.batchDraw();
+        updateButtons();
+    }
+});
+
+// Color buttons
+// Create color buttons dynamically (so no HTML change required)
+const parentContainer = document.getElementById('container');
+let colorRedBtn = null;
+let colorBlueBtn = null;
+if (parentContainer) {
+    // create a small control panel below the canvas
+    const ctrl = document.createElement('div');
+    ctrl.style.marginTop = '8px';
+    colorRedBtn = document.createElement('button');
+    colorRedBtn.id = 'colorRed';
+    colorRedBtn.textContent = 'Couleur: Rouge';
+    colorBlueBtn = document.createElement('button');
+    colorBlueBtn.id = 'colorBlue';
+    colorBlueBtn.textContent = 'Couleur: Bleu';
+    ctrl.appendChild(colorRedBtn);
+    ctrl.appendChild(colorBlueBtn);
+    parentContainer.parentNode.insertBefore(ctrl, parentContainer.nextSibling);
+}
+
+function updateButtons() {
+    // enable/disable undo redo according to stacks
+    if (undoButton) undoButton.disabled = !undoManager.canUndo();
+    if (redoButton) redoButton.disabled = !undoManager.canRedo();
+    // color buttons enabled only if a line is selected
+    if (colorRedBtn) colorRedBtn.disabled = !selectedLine;
+    if (colorBlueBtn) colorBlueBtn.disabled = !selectedLine;
+}
+
+if (colorRedBtn) {
+    colorRedBtn.addEventListener('click', () => {
+        if (!selectedLine) return;
+        const cmd = new ChangeColorCommand(selectedLine, 'red');
+        undoManager.executeCommand(cmd);
+        updateButtons();
+    });
+}
+
+if (colorBlueBtn) {
+    colorBlueBtn.addEventListener('click', () => {
+        if (!selectedLine) return;
+        const cmd = new ChangeColorCommand(selectedLine, 'blue');
+        undoManager.executeCommand(cmd);
+        updateButtons();
+    });
+}
+
+// initialize button states
+updateButtons();
